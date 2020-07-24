@@ -1,0 +1,57 @@
+---
+title: "Linear Regression"
+output: html_notebook
+---
+
+### 데이터 불러오기
+```{r}
+library(MASS)
+data=Boston
+```
+보스턴 주택가격 예측 데이터를 이용해서 선형회귀모형을 맞춰본다.
+
+### 선형회귀
+```{r}
+lm.bh=lm(medv~., data=data)
+summary(lm.bh)
+```
+
+반응변수를 medv로 하고 종속변수를 medv 이외의 모든 변수로 설정한 후에 단순선형회귀모형을 만들었다.
+summary()로는 베타 추정량을 알 수 있다.
+ -> 모형적합성에 대한 가설 검정
+ H0 : 모형이 적합하지 않다.
+ H1 : 모형이 적합하다.
+ 귀무가설하에 자유도가 13인 F-분포를 따르므로 p-value=2.2e-16<0.05이므로 유의수준 0.05 하에서 귀무가설을 기각한다. 그러므로, 모형이 적합하든것을 알 수 있다.
+
+```{r}
+anova(lm.bh)
+```
+
+anova()로는 f 통계량을 기준으로 설명변수들이 유의한지 보여준다. 
+ -> 입력변수들의 유의성 검정
+ H0 : 입력변수가 유의하지 않다.
+ H1 : 입력변수가 유의하다. 
+ 유의수준 0.05하에서 nox, rad변수를 제외한 나머지 변수는 출력변수가 medv인 선형모형에서 유의하다는것을 알 수 있다.
+ 
+### 그래프 그리기
+```{r}
+layout(matrix(c(1,2,3,4),2,2)) # optional 4 graphs/page 
+plot(lm.bh)
+
+```
+
+1. 적합값과 잔차 PLOT을 이용해서 특이값이 있는지 알 수 있다. 
+  - 특이값이 존재함을 알 수 있다.
+2. Q-Q- PLOT을 이용해서 정규성이 만족되는지 확인할 수 있다. 
+  - 정규성을 대체로 만족함을 알 수 있다.
+3. LEVERAGE PLOT을 이용해서 큰 값을 갖는 관측치가 있는지 확인할 수 있다.
+  - 대부분의 관측치보다 큰 관측치가 있음을 알 수 있다.
+
+### logistic regression
+```{r}
+library(boot)
+data(nodal)
+rd = nodal[,-1]
+gfit = glm(r~., data=rd, family="binomial")
+summary(gfit)
+```
