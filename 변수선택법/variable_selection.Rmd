@@ -1,0 +1,137 @@
+---
+title: "Variable Selection"
+output: html_notebook
+---
+
+### 데이터 불러오기
+
+```{r echo=TRUE}
+library(ElemStatLearn)
+Data = prostate
+str(Data)
+```
+이 중, train을 제외한 나머지 변수를 사용하기 위해 `data.use`라는 이름으로 변수선택을 하려고 한다.
+
+변수선택은 반응변수에 대하여 여러 입력변수들이 주어졌을 때 설명력이 있는 입력변수들을 선택해서 올바른 모형을 구축하는 방법이다. 
+
+변수선택 시, 과대적합문제와 모형의 복잡도 문제가 발생하는데, 이 둘을 고려해서 모형을 선택한다. 
+```{r echo=TRUE}
+data.use = Data[,-ncol(Data)]
+```
+
+### Linear Regression
+
+모든 설명변수가 들어간 선형회귀를 만든다. 
+```{r echo=TRUE}
+lm.full = lm(lpsa~., data=data.use)
+par(mfrow=c(2,2))
+plot(lm.full)
+```
+#### AIC를 이용한 후진제거법
+```{r echo=TRUE}
+backward.aic = step(lm.full, lpsa~1, direction="backward")
+summary(backward.aic)
+```
+`lpsa~1`의 뜻은 최소모형으로 절편만 있는 모형까지 다 살펴본다는 것이다. 
+모형을 선택할 때, AIC값이 최소인 모형을 선택하게 된다.
+
+- 결과적으로 최적의 모형 -> lpsa ~ lcavol + lweight + age + lbph + svi
+
+
+#### BIC를 이용한 후진선택법
+```{r echo=TRUE}
+backward.bic = step(lm.full, lpsa~1, direction="backward", k=log(nrow(data.use)))
+summary(backward.bic)
+```
+모형을 선택할 때, BIC값이 최소인 모형을 선택하게 된다.
+
+- 결과적으로 최적의 모형 -> lpsa ~ lcavol + lweight + svi
+
+- BIC : 더 간결한 모형 선호
+- AIC : 예측에 더 좋은 모형 선호한다.
+
+
+### Logistic Regression
+
+#### 데이터 불러오기
+```{r echo=TRUE}
+library(MASS)
+library(mlbench)
+data(Sonar)
+y.tmp = rep(1,nrow(Sonar))
+y.tmp[which(Sonar[,61]=="R")] = 0
+Sonar[,61] = y.tmp
+```
+
+#### AIC를 이용한 전진선택법
+```{r}
+glm.const = glm(Class~1, data=Sonar,family=binomial)
+fmla = as.formula(paste("Class"," ~ ",paste(colnames(Sonar)[-ncol(Sonar)],
+           collapse="+")))
+forward.aic = step(glm.const, fmla, direction="forward")
+#summary(forward.aic)
+forward.aic
+```
+- 모형 : Class ~ V11 + V47 + V36 + V45 + V4 + V15 + V21 + 
+    V51 + V8 + V49 + V50 + V1 + V3 + V52 + V54 + V23 + V29 + 
+    V31 + V12 + V30 + V32 + V53 + V7 + V16 + V9 + V26 + V37 + 
+    V34 + V35 + V38 + V6 + V40 + V59 + V19 + V56
+- 추정치를 볼 때 오즈비를 이용한다.
+    ex] v45가 한단위 증가=다른 변수들은 고정된 상태에서 오즈비가 exp(19.45)만큼 증가한다.
+    
+#### BIC를 이용한 전진선택법
+```{r echo=TRUE}
+glm.const = glm(Class~1, data=Sonar,family=binomial)
+fmla = as.formula(paste("Class"," ~ ",paste(colnames(Sonar)[-ncol(Sonar)],
+           collapse="+")))
+forward.bic = step(glm.const, fmla, direction="forward", k=log(nrow(Sonar)))
+summary(forward.bic)
+```
+모형 : Class ~ V11 + V47 + V36 + V45 + V4 + V15 + V21
+- 어느정도의 예측력을 만족하는 간단한 모형이다.
+- 추정치를 볼 때 오즈비를 이용한다.
+    ex] v11이 한단위 증가=다른 변수들은 고정된 상태에서 오즈비가 exp(8.88)만큼 증가한다.
+    - 이 때, v11값이 증가한다는 것은 metal로 판단할 확률이 증가한다는 것
+    - 음수이면, rock로 판정확률이 증가한다.
+
+### 전진선택법, 5-cross validation 이용
+5-cross validation인 5묶음 교차학인을 위해서 자료를 자동으로 나누는 cv.flods를 사용한다. 
+```{r echo=TRUE}
+library(lars)
+cv.log = function(yy, xx, K=5)
+{
+    cverr = rep(0,K)
+    folder = cv.folds(length(yy),K)
+    for(k in 1:K)
+    {
+        xx = as.matrix(xx)
+        gg = glm(yy[-folder[[k]]]~xx[-folder[[k]],],family=binomial)
+        pyy = cbind(1,xx[folder[[k]],])%*%gg$coef
+        pyy = exp(pyy)/(1+exp(pyy))
+        po = which(pyy>=0.5);pyy[po]=1;pyy[-po]=0
+        cverr[k] = sum(abs(pyy-yy[folder[[k]]]))/length(yy[folder[[k]]])
+    }
+    return(cverr)
+}
+
+select.var = c();full.var = colnames(Sonar)[-ncol(Sonar)]
+cv.err = 1
+for(i in 1:60)
+{
+    cv.err.tmp = c()
+    for(j in 1:length(full.var))
+    {
+        cv.err.tmp[j] = mean(cv.log(Sonar[,61],Sonar[,c(select.var,full.var[j])]),K=10)
+    }
+    select.var[i] = full.var[which.min(cv.err.tmp)]
+    full.var = full.var[-which.min(cv.err.tmp)]
+    print(select.var);print(min(cv.err.tmp))
+    if(cv.err<=min(cv.err.tmp))
+        break
+    cv.err = min(cv.err.tmp)
+}
+```
+로지스틱 선형회귀를 따르는 베타값을 구한 후에, 확률 예측값을 구한다. 그 다음 분류를 하고 교차확인 오차를 구한다.
+5-묶음 교차확인법에서는 "V12" "V32" "V25" "V60" "V47" "V11" "V46" "V53" "V59"변수를 사용한 모형을 선택했다.
+
+
