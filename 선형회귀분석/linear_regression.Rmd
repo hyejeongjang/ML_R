@@ -5,6 +5,7 @@ output: html_notebook
 
 ### 데이터 불러오기
 ```{r}
+#install.packages("MASS")
 library(MASS)
 data=Boston
 ```
