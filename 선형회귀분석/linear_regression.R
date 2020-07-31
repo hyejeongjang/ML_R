@@ -1,8 +1,9 @@
-### µ¥ÀÌÅÍ ºÒ·¯¿À±â
+### ë°ì´í„° ë¶ˆëŸ¬ì˜¤ê¸°
+#install.packages("MASS")
 library(MASS)
 data=Boston
 
-### ´Ü¼ø¼±ÇüÈ¸±Í
+### ë‹¨ìˆœì„ í˜•íšŒê·€
 lm.bh=lm(medv~., data=data)
 summary(lm.bh)
 anova(lm.bh)
@@ -11,7 +12,7 @@ anova(lm.bh)
 layout(matrix(c(1,2,3,4),2,2)) # optional 4 graphs/page 
 plot(lm.bh)
 
-### ·ÎÁö½ºÆ½È¸±Í¸ğÇü
+### ë¡œì§€ìŠ¤í‹±íšŒê·€ëª¨í˜•
 library(boot)
 data(nodal)
 rd = nodal[,-1]
