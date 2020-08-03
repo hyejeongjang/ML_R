@@ -1,0 +1,130 @@
+---
+title: "Evaluating Forecast"
+author: "JANG"
+date: '2020 8 2 '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## 사용할 데이터 전처리
+### 데이터 불러오기
+```{r}
+library(caret)
+data(GermanCredit)
+german = GermanCredit
+str(german)
+german$Class = ifelse(GermanCredit$Class=="Bad",0,1)
+```
+
+### train, test데이터로 나누기
+- 보통 train데이터는 전체 데이터의 70%를, test데이터는 그 나머지인 30%를 이용한다.
+
+```{r}
+tr.ran = sample(1000, 700) #n=1000
+tr.german = german[tr.ran,] #70% of data training set
+ts.german = german[-tr.ran,] #30% of data test set
+dim(tr.german)
+```
+
+## AIC에 의한 전진선택법을 사용해서 맞춘 선형모형
+```{r include=FALSE}
+lm.const = lm(Class~1, data=tr.german)
+glm.const = glm(Class~1, data=tr.german, family=binomial)
+fmla = as.formula(paste("Class"," ~ ",paste(colnames(tr.german)
+	[-ncol(tr.german)],collapse="+")))
+lm.aic = step(lm.const, fmla, direction="forward", trace=FALSE)
+glm.aic = step(glm.const, fmla, direction="forward", trace=FALSE)
+```
+
+```{r}
+summary(lm.aic)
+summary(glm.aic)
+```
+
+## 오분류율표 작성(confusion matrix)
+- 선형회귀모형
+```{r}
+pred.lm = predict(lm.aic)
+pred = rep(0,length(pred.lm)) #0의 값을 예측값의 개수만큼 만든다.
+pred[pred.lm>=0.5] =1  # 확률이 0.5보다 크면 11의 값을 가진다.
+table(true=tr.german$Class, pred)
+```
+
+- 로지스틱 회귀모형
+```{r}
+pred.glm = predict(glm.aic,type="response")
+pred = rep(0, length(pred.glm))
+pred[pred.glm>=0.5] = 1
+table(true=tr.german$Class, pred)
+```
+
+## ROC 커브 그리기
+```{r}
+library(ROCR)
+ROC.lm = performance(prediction(pred.lm, tr.german$Class),
+	 "tpr","fpr")
+ROC.glm = performance(prediction(pred.glm, tr.german$Class),
+	 "tpr","fpr")
+plot(ROC.lm, main="ROC curve for linear regression")
+x = unlist(attr(ROC.glm, "x.values"))
+y = unlist(attr(ROC.glm, "y.values"))
+lines(x, y, lty=2, col=2)
+legend('bottomright', legend=c("linear","logistic"),
+	lty=1:2, col=1:2)
+```
+
+## lift 구하기
+- lift 구하는 함수 정의
+```{r}
+fun.lift = function(xx, K)
+{
+    num.class = round(nrow(xx)/K)
+    base.lift = sum(xx[,1])/nrow(xx)
+    class.lift = list();output = c()
+    for(i in 1:K)
+    {
+        if(i!=K) {
+            class.lift[[i]] = seq((1+num.class*(i-1)), num.class*i) 
+        } else
+            class.lift[[i]] = seq((1+num.class*(i-1)),nrow(xx))
+        CR = 100*sum(xx[class.lift[[i]],1])/sum(xx[,1])
+        resp = sum(xx[class.lift[[i]],1])/length(class.lift[[i]])
+        lift = resp/base.lift
+        output = rbind(output, c(CR, resp, lift))
+    }
+    colnames(output) = c("%Captured response","%Response","Lift")
+    return(list(base.lift=base.lift,num.class=K,lift.chart=output))
+}
+
+```
+
+### lift chart
+- 선형회귀모형
+```{r}
+sort.pred.lm = sort(pred.lm,decreasing=T)
+sort.tr.german = tr.german$Class[order(pred.lm,decreasing=T)]
+lm.lift.data = cbind(sort.tr.german, sort.pred.lm) #First column: observed Y
+lm.lift = fun.lift(lm.lift.data,10)
+lm.lift
+```
+
+- 로지스틱회귀모형
+```{r}
+sort.pred.glm = sort(pred.glm, decreasing=T)
+sort.tr.german = tr.german$Class[order(pred.glm, decreasing=T)]
+glm.lift.data = cbind(sort.tr.german, sort.pred.glm)
+glm.lift = fun.lift(glm.lift.data,10)
+glm.lift
+```
+
+### lift chart
+```{r}
+plot(lm.lift$lift.chart[,3], type="o",ylab="Lift",
+	xlab="Class",pch=7,lty=2,col="red")
+lines(glm.lift$lift.char[,3], type="o",pch=7,lty=2,
+	col="blue")
+legend('topright', legend=c("linear","logistic"),lty=2,
+	col=c(2,4), pch=7)
+```
